@@ -30,9 +30,21 @@ public class SinglePlayer{
     - Depth First Search Algorithm
     - Heuristic Search Algorithm
     - Bidirectional Search Algorithm
+    
+    Ideas:
+    
+    -   Try to store the branches so they do not need to be computed again
+    -   Create b rudimentary neural network. Have multiple layers, each judging the board from different angles:
+    -       One layer looks at legal moves
+    -       One layer looks for large squares that it may want to capture, regardless of whether or not it is possible in the near future.
+    -       One layer looks for large squares that the other player may want to capture, regardless of whether or not it is possible in the near future.
+    -       One layer can keep track of the opponents most recent moves and try to figure out what it is attempting to accomplish.
+    
+    Once each layer agrees on what b good move is based on its own criterias for what is "good," the move is made.
+    
     */
     
-    boolean showProcess = true;
+    boolean showProcess = false;
     public void move(int player){
         long start = System.currentTimeMillis();
         this.player = player;
@@ -55,53 +67,27 @@ public class SinglePlayer{
     }
     
     public int[] getMove(int player){
-        List<int[]> possible = new ArrayList<>();
-        //Find all the possible moves
-        if (Board.game.path.nextLarge != -1 && Board.game.path.Largefilled[Board.game.path.nextLarge] == 0){
-            for (int a = 0; a<9; a++){
-                if (Board.game.path.grid[Board.game.path.nextLarge][a] == 0){
-                    int[] array = {Board.game.path.nextLarge, a};
-                    if (MainAI.canWin(Board.game.path.grid, array[0], array[1], player)){
-                        return array;
-                    }
-                    possible.add(array);
+        // Find all the possible moves
+        List<int[]> possible = Board.game.path.getNextPossible();
+        // If I can win, take the win
+        if (Board.game.path.numFill[player-1] > 1){
+            for (int a = 0; a<possible.size(); a++){
+                if (MainAI.canWin(Board.game.path.grid, possible.get(a)[0], possible.get(a)[1], player)){
+                    return possible.get(a);
                 }
             }
         }
-        else{
-            for (int a = 0; a<9; a++){
-                if (Board.game.path.Largefilled[a] == 0){
-                    for (int b = 0; b<9; b++){
-                        if ( Board.game.grid[a][b] == 0){
-                            int[] array = {a, b};
-                            if (MainAI.canWin(Board.game.path.grid, array[0], array[1], player)){
-                                return array;
-                            }
-                            possible.add(array);
-                        }
-                    }
-                }
-            }
-        }
-        if (possible.size() == 1){
-            int[] array = {possible.get(0)[0], possible.get(0)[1]};
-            return array;
-        }
-        List<int[]> viable = new ArrayList<>();
-        List<List<int[]>> nextPossible = new ArrayList<>();
-        for (int times = 0; times<2; times++){
+        // If doing this move will make me lose, don't do it
+        if (Board.game.path.numFill[other[player]-1] > 1){
             for (int a = 0; a<possible.size(); a++){
                 Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
-                List<int[]> nextpossible = new ArrayList<>();
                 if (set.nextLarge != -1 && set.Largefilled[set.nextLarge] == 0){
                     for (int b = 0; b<9; b++){
                         if (set.grid[set.nextLarge][b] == 0){
                             int[] array = {set.nextLarge, b};
-                            if (times == 1 || !MainAI.canWin(set.grid, array[0], array[1], other[player])){
-                                nextpossible.add(array);
-                            }
-                            else{
-                                nextpossible.clear();
+                            if (MainAI.canWin(set.grid, array[0], array[1], other[player])){
+                                possible.remove(a);
+                                a--;
                                 break;
                             }
                         }
@@ -113,11 +99,9 @@ public class SinglePlayer{
                             for (int c = 0; c<9; c++){
                                 if (set.grid[b][c] == 0){
                                     int[] array = {b, c};
-                                    if (times == 1 || !MainAI.canWin(set.grid, array[0], array[1], other[player])){
-                                        nextpossible.add(array);
-                                    }
-                                    else{
-                                        nextpossible.clear();
+                                    if (MainAI.canWin(set.grid, array[0], array[1], other[player])){
+                                        possible.remove(a);
+                                        a--;
                                         b = 9;
                                         break;
                                     }
@@ -126,29 +110,42 @@ public class SinglePlayer{
                         }
                     }
                 }
-                if (!nextpossible.isEmpty()){
-                    viable.add(possible.get(a));
-                    nextPossible.add(nextpossible);
+            }
+            // If no matter what I do, I will lose, See if there is possibility to tie.
+            if (possible.isEmpty()){
+                possible.addAll(Board.game.path.getNextPossible());
+                for (int a = 0; a<possible.size(); a++){
+                    Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
+                    if (set.winner == 3){
+                        return possible.get(a);
+                    }
                 }
-            }
-            if (!viable.isEmpty()){
-                break;
+                return possible.get(p.randomint(0, possible.size()-1));
             }
         }
-        if (viable.size() == 1){
-            int[] array = {viable.get(0)[0], viable.get(0)[1]};
-            return array;
+        if (possible.size() == 1){
+            return possible.get(0);
         }
-        else if (viable.isEmpty()){
-            System.out.println("Error Here");
-            return MainAI.randomArray();
+        if (possible.isEmpty()){
+            possible.addAll(Board.game.path.getNextPossible());
+            return possible.get(p.randomint(0, possible.size()-1));
+        }
+        //return NeuralNetwork.process(Board.game.path, possible, player);
+        return getMove(possible, player);
+    }
+    
+    private int[] getMove(List<int[]> possible, int player){
+        List<List<int[]>> nextPossible = new ArrayList<>();
+        for (int a = 0; a<possible.size(); a++){
+            Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
+            nextPossible.add(set.getNextPossible());
         }
         if (Board.game.path.numFill[player-1] >= 2){
-            //If there is a way to force my opponent into giving me the large square, do it
+            //If there is b way to force my opponent into giving me the large square, do it
             List<Integer> largeSquareWin = new ArrayList<>();
             for (int a = 0; a<MainAI.planAhead.length; a++){
                 for (int b = 0; b<MainAI.planAhead[a].length; b++){
-                    //If I have two squares in a row:
+                    //If I have two squares in b row:
                     if (Board.game.path.Largefilled[MainAI.planAhead[a][b][0]] == player &&
                             Board.game.path.Largefilled[MainAI.planAhead[a][b][1]] == player){
                         largeSquareWin.add(a);
@@ -156,9 +153,9 @@ public class SinglePlayer{
                 }
             }
             if (!largeSquareWin.isEmpty()){
-                for (int a = 0; a<viable.size(); a++){
+                for (int a = 0; a<possible.size(); a++){
                     boolean force = true;
-                    Set set = new Set(Board.game.path, viable.get(a)[0], viable.get(a)[1]);
+                    Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
                     for (int b = 0; b<nextPossible.get(a).size(); b++){
                         Set newset = new Set(set, nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]);
                         if (!largeSquareWin.contains(newset.nextLarge) && newset.nextLarge != -1){
@@ -167,61 +164,91 @@ public class SinglePlayer{
                         }
                     }
                     if (force){
-                        return viable.get(a);
+                        return possible.get(a);
                     }
                 }
-                if (showProcess){ System.out.print("Force Analysis Completed:     "); }
+                if (showProcess){ System.out.println("Force Analysis Completed"); }
             }
         }
-        double[] primaryAnalysis = primaryAnalysis(Board.game.path, viable, nextPossible, player);
-        for (int a = 1; a<primaryAnalysis.length; a++){
-            if (primaryAnalysis[a] < primaryAnalysis[a-1] ||
-                    (primaryAnalysis[a] == primaryAnalysis[a-1] && Math.random() > 0.5)){
-                double primary = primaryAnalysis[a-1];
-                primaryAnalysis[a-1] = primaryAnalysis[a];
-                primaryAnalysis[a] = primary;
-                int[] viable_Place = viable.get(a-1);
-                viable.set(a-1, viable.get(a));
-                viable.set(a, viable_Place);
-                List<int[]> next_Place = nextPossible.get(a-1);
-                nextPossible.set(a-1, nextPossible.get(a));
-                nextPossible.set(a, next_Place);
-                a = 0;
+        double[] rating = new double[possible.size()];
+        double[] primaryRating = primary(possible, player);
+        for (int a = 0; a<primaryRating.length; a++){
+            rating[a] += primaryRating[a]*15/Board.game.path.size();
+        }
+        double[] depthRating = depth(possible, nextPossible, player);
+        for (int a = 0; a<depthRating.length; a++){
+            rating[a] += depthRating[a];
+        }
+        if (Board.game.path.size() > 20 && Board.game.path.nextLarge != -1){
+            double[] randomSampleRating = randomSample(possible, nextPossible, player);
+            for (int a = 0; a<randomSampleRating.length; a++){
+                rating[a] += randomSampleRating[a]/Board.game.path.numEmpty();
             }
+        }
+        Sort.quicksort(rating, possible);
+        if (showProcess){
+            System.out.print("Rating:  ");
+            for (int a = 0; a<rating.length; a++){
+                System.out.print(p.round(rating[a], 3)+"  ");
+            }
+            System.out.print("\nMove:      ");
+            for (int a = 0; a<possible.size(); a++){
+                System.out.print(possible.get(a)[1]+"      ");
+            }
+            System.out.println("\n\nMove Made:   ["+possible.get(0)[0]+", "+possible.get(0)[1]+"]");
+        }
+        return possible.get(0);
+    }
+    
+    private double[] primary(List<int[]> temp, int player){
+        List<int[]> possible = new ArrayList<>();
+        for (int a = 0; a<temp.size(); a++){
+            possible.add(temp.get(a));
+        }
+        //double[] primaryAnalysis = primaryAnalysis(Board.game.path, possible, nextPossible, player);
+        double[] primaryAnalysis = NeuralNetwork.getNeuralValues(Board.game.path, possible, player);
+        for (int a = 0; a<possible.size(); a++){
+            double z = 0;
+            for (int b = 0; b<MainAI.setup.length; b++){
+                for (int c = 0; c<MainAI.setup[b].length; c++){
+                    if (Board.game.path.grid[possible.get(a)[1]][MainAI.setup[b][c][0]] == other[player] &&
+                            Board.game.path.grid[possible.get(a)[1]][MainAI.setup[b][c][1]] == other[player]){
+                        z++;
+                    }
+                }
+            }
+            primaryAnalysis[a] -= 3*z;
         }
         if (showProcess){
-            System.out.print("Primary Analysis:   {");
+            System.out.print("Primary:   ");
             for (int a = 0; a<primaryAnalysis.length; a++){
-                if (a != 0){
-                    System.out.print(" "+primaryAnalysis[a]);
-                }
-                else{
-                    System.out.print(primaryAnalysis[a]);
-                }
+                System.out.print(p.round(primaryAnalysis[a], 3)+"  ");
             }
-            System.out.println("}");
-            System.out.print("Viable:             {");
-            for (int a = 0; a<viable.size(); a++){
-                if (a != 0){
-                    System.out.print("   "+viable.get(a)[1]);
-                }
-                else{
-                    System.out.print(viable.get(a)[1]);
-                }
+            System.out.print("\nMove:      ");
+            for (int a = 0; a<possible.size(); a++){
+                System.out.print(possible.get(a)[1]+"      ");
             }
-            System.out.println("}");
+            System.out.println("");
         }
-        double[] depthSearch = new double[viable.size()];
-        for (int a = 0; a<viable.size(); a++){ //Math.min(viable.size(), 15)
-            depthSearch[a] = primaryAnalysis[a];
-            Set depth1 = new Set(Board.game.path, viable.get(a)[0], viable.get(a)[1]);
-            if (depth1.nextLarge == -1){
-                depthSearch[a] -= Board.game.path.numEmpty()/2.0;
+        return primaryAnalysis;
+    }
+    
+    private double[] depth(List<int[]> temp, List<List<int[]>> nextTemp, int player){
+        List<int[]> possible = new ArrayList<>();
+        for (int a = 0; a<temp.size(); a++){
+            possible.add(temp.get(a));
+        }
+        List<List<int[]>> nextPossible = new ArrayList<>();
+        for (int a = 0; a<nextTemp.size(); a++){
+            List<int[]> temp1 = new ArrayList<>();
+            for (int b = 0; b<nextTemp.get(a).size(); b++){
+                temp1.add(nextTemp.get(a).get(b));
             }
-            if (depth1.numFill[player-1] > Board.game.path.numFill[player-1]){
-                depthSearch[a] += Board.game.path.numEmpty()/2.0;
-            }
-            List<List<int[]>> depth3Possible = new ArrayList<>();
+            nextPossible.add(temp1);
+        }
+        double[] depthSearch = new double[possible.size()];
+        for (int a = 0; a<possible.size(); a++){ //Math.min(possible.size(), 15)
+            Set depth1 = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
             for (int b = 0; b<nextPossible.get(a).size(); b++){
                 Set depth2 = new Set(depth1, nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]);
                 if (depth2.winner != 0){
@@ -231,7 +258,6 @@ public class SinglePlayer{
                     if (depth2.winner == 3){
                         depthSearch[a] += Board.game.path.size()/2.0;
                     }
-                    depth3Possible.add(new ArrayList<>());
                 }
                 else{
                     if (depth2.numFill[other[player]-1] > depth1.numFill[other[player]-1]){
@@ -240,304 +266,33 @@ public class SinglePlayer{
                     if (depth2.nextLarge == -1){
                         depthSearch[a] += Board.game.path.size()/5.0;
                     }
-                    depth3Possible.add(depth2.getNextPossible());
-                    depthSearch[a] += depth3(depth2, depth3Possible.get(b), viable.size()*nextPossible.size(), player);
+                    if (depth2.nextLarge != -1){
+                        depthSearch[a] += depth3(depth2, depth2.getNextPossible(), possible.size()*nextPossible.size(), player)/(9-depth2.numFilled);
+                    }
+                    else{
+                        depthSearch[a] += depth3(depth2, depth2.getNextPossible(), possible.size()*nextPossible.size(), player);
+                    }
                 }
             }
-            double[] depth1OpponentAnalysis = primaryAnalysis(depth1, nextPossible.get(a), depth3Possible, other[player]);
+            //            double[] depth1OpponentAnalysis = primaryAnalysis(depth1, nextPossible.get(b), depth3Possible, other[player]);
+            double[] depth1OpponentAnalysis = NeuralNetwork.getNeuralValues(depth1, nextPossible.get(a), other[player]);
             for (int b = 0; b<depth1OpponentAnalysis.length; b++){
-                depthSearch[a] -= depth1OpponentAnalysis[b]/2.0;
+                depthSearch[a] -= depth1OpponentAnalysis[b]/3.0/nextPossible.get(a).size();
             }
         }
         if (showProcess){
-            System.out.print("Final Depth Search Values:   {");
+            System.out.print("Depth:   ");
             for (int a = 0; a<depthSearch.length; a++){
-                if (a != 0){
-                    System.out.print(" "+p.round(depthSearch[a], 2));
-                }
-                else{
-                    System.out.print(p.round(depthSearch[a], 2));
-                }
+                System.out.print(p.round(depthSearch[a], 3)+"  ");
             }
-            System.out.println("}");
-        }
-        for (int a = 1; a<depthSearch.length; a++){
-            if (depthSearch[a] > depthSearch[a-1] ||
-                    (depthSearch[a] == depthSearch[a-1] && Math.random() > 0.5)){
-                double depth_hold = depthSearch[a-1];
-                depthSearch[a-1] = depthSearch[a];
-                depthSearch[a] = depth_hold;
-                int[] viable_Place = viable.get(a-1);
-                viable.set(a-1, viable.get(a));
-                viable.set(a, viable_Place);
-                a = 0;
+            System.out.print("\nMove:      ");
+            for (int a = 0; a<possible.size(); a++){
+                System.out.print(possible.get(a)[1]+"      ");
             }
+            System.out.println("");
         }
-        
-        return viable.get(0);
+        return depthSearch;
     }
-    
-    private double[] primaryAnalysis(Set board, List<int[]> viable, List<List<int[]>> nextPossible, int player){
-        double[] values = new double[viable.size()];
-        List<Thread> threads = new ArrayList<>();
-        //Analyse Small Square
-        if (board.size() < 15){
-            // Is the box that I am to play in, empty?
-            if (board.nextLarge != -1){
-                boolean empty = true;
-                for (int b = 0; b<9; b++){
-                    if (board.grid[board.nextLarge][b] != 0){
-                        empty = false;
-                    }
-                }
-                if (empty){
-                    values[board.nextLarge]+=2;
-                }
-            }
-            // If I choose this square as my final decision, is the box in which the opponent must play, empty?
-            for (int a = 0; a<viable.size(); a++){
-                Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-                if (set.nextLarge != -1){
-                    boolean empty = true;
-                    for (int b = 0; b<9; b++){
-                        if (set.grid[viable.get(a)[1]][b] != 0){
-                            empty = false;
-                        }
-                    }
-                    if (empty){
-                        values[a]++;
-                    }
-                }
-            }
-        }
-        // If this were a regular game of tic tac toe, is making this move good in terms of regular tic Tac Toe Heuristics?
-        for (int a = 0; a<viable.size(); a++){
-            if (viable.get(a)[1] == 4){
-                values[a]--;
-            }
-            else if(viable.get(a)[1]%2 == 0){
-                values[a]++;
-            }
-            if (viable.get(a)[0] == viable.get(a)[1]){
-                values[a]++;
-            }
-        }
-        // Can I take this square?
-        for (int a = 0; a<viable.size(); a++){
-            Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-            if (set.numFill[player-1] > board.numFill[player-1]){
-                values[a]++;
-                // Is the large square that I am taking, the center square
-                if (viable.get(a)[0] == 4){
-                    values[a]++;
-                }
-                // Is it worth taking this square?
-                if (set.numFilled > 1){
-                    int numSetups = 0;
-                    for (int b = 0; b<MainAI.planAhead[viable.get(a)[0]].length; b++){
-                        // Is there a square taken by the other player in the way of a setup?
-                        if (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][0]] != other[player] &&
-                                set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][1]] != other[player]){
-                            // Will taking this square lead to a potential win? In other words, can I create a setup that can possibly lead to a win
-                            for (int c = 0; c<MainAI.planAhead[viable.get(a)[0]][b].length; c++){
-                                if (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][c]] == player){
-                                    values[a]++;
-                                    numSetups++;
-                                }
-                            }
-                        }
-                        else if (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][0]] == other[player] ||
-                                set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][1]] == other[player]){
-                            // Will taking this square prevent a potential loss?
-                            if (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][0]] == other[player] &&
-                                    set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][1]] == other[player]){
-                                values[a]+=2;
-                            }
-                            // There is a square taken by the other player that negates the potential that taking this square could have
-                            else if ((set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][0]] == player &&
-                                    set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][1]] == other[player]) ||
-                                    (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][0]] == other[player] &&
-                                    set.Largefilled[MainAI.planAhead[viable.get(a)[0]][b][1]] == player)){
-                                values[a]--;
-                            }
-                        }
-                    }
-                    // Can I create a fork in the large grid?
-                    if (numSetups > 1){
-                        values[a]+=numSetups;
-                    }
-                }
-                //This is the first square being taken
-                else{
-                    values[a]++;
-                }
-            }
-        }
-        // Can I block my opponent from taking this square in the future?
-        for (int a = 0; a<viable.size(); a++){
-            Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-            for (int b = 0; b<MainAI.planAhead[viable.get(a)[1]].length; b++){
-                if (set.grid[viable.get(a)[0]][MainAI.planAhead[viable.get(a)[1]][b][0]] == other[player] &&
-                        set.grid[viable.get(a)[0]][MainAI.planAhead[viable.get(a)[1]][b][1]] == other[player]){
-                    values[a]++;
-                    // Is it worth stopping them from potentially taking this square in the future?
-                    if (set.numFill[other[player]-1] > 0){
-                        for (int c = 0; c<MainAI.planAhead[viable.get(a)[0]].length; c++){
-                            // If they take this square in the future, can they create a potential possibility of winning
-                            if (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][c][0]] != player &&
-                                    set.Largefilled[MainAI.planAhead[viable.get(a)[0]][c][1]] != player &&
-                                    (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][c][0]] == other[player] ||
-                                    set.Largefilled[MainAI.planAhead[viable.get(a)[0]][c][1]] == other[player])){
-                                values[a]++;
-                                // If they take this square in the future, can they win?
-                                if (set.Largefilled[MainAI.planAhead[viable.get(a)[0]][c][0]] == other[player] &&
-                                        set.Largefilled[MainAI.planAhead[viable.get(a)[0]][c][1]] == other[player]){
-                                    values[a]+=2;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        // Can I create or block a fork in the grid I must play in?
-        for (int a = 0; a<viable.size(); a++){
-            int numSetup1 = 0, numSetup2 = 0;
-            Set set = new Set(Board.game.path, viable.get(a)[0], viable.get(a)[1]);
-            if (set.numFill[player-1] == Board.game.path.numFill[player-1]){
-                for (int b = 0; b<MainAI.planAhead[viable.get(a)[1]].length; b++){
-                    if (set.grid[viable.get(a)[0]][MainAI.planAhead[viable.get(a)[1]][b][0]] != other[player] &&
-                            set.grid[viable.get(a)[0]][MainAI.planAhead[viable.get(a)[1]][b][1]]  != other[player]){
-                        if (set.grid[viable.get(a)[0]][MainAI.planAhead[viable.get(a)[1]][b][0]] == player ||
-                                set.grid[viable.get(a)[0]][MainAI.planAhead[viable.get(a)[1]][b][1]] == player){
-                            numSetup2++;
-                        }
-                    }
-                    else{
-                        numSetup1++;
-                    }
-                }
-                //I can create a fork in the grid that I must play in if I make this move
-                if (numSetup2 > 1){
-                    values[a] += numSetup2;
-                }
-                //I can block a fork in the grid that I must play in if I make this move
-                if (numSetup1 > 1){
-                    values[a]++;
-                }
-            }
-        }
-        // If I play in this square, am I setting myself up to be able to take this square in the future?
-        for (int a = 0; a<viable.size(); a++){
-            Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-            for (int b = 0; b<MainAI.setup[viable.get(a)[1]].length; b++){
-                if ((set.grid[viable.get(a)[0]][MainAI.setup[viable.get(a)[1]][b][0]] != other[player] &&
-                        set.grid[viable.get(a)[0]][MainAI.setup[viable.get(a)[1]][b][1]] != other[player]) &&
-                        (set.grid[viable.get(a)[0]][MainAI.setup[viable.get(a)[1]][b][0]] == player ||
-                        set.grid[viable.get(a)[0]][MainAI.setup[viable.get(a)[1]][b][1]] == player)){
-                    values[a]++;
-                }
-            }
-        }
-        // If I play in this square, can the opponent take the large square that I am sending them to?
-        for (int a = 0; a<viable.size(); a++){
-            for (int b = 0; b<nextPossible.get(a).size(); b++){
-                Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-                set.add(nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]);
-                if (set.numFill[other[player]] > board.numFill[other[player]]){
-                    values[a]-=2;
-                }
-            }
-        }
-        // If I play in this square, am I giving my opponent the freedom to go anywhere?
-        for (int a = 0; a<viable.size(); a++){
-            Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-            if (set.nextLarge == -1){
-                values[a]--;
-            }
-        }
-        
-        //Analyse Large Squares
-        List<Integer> largeSquareWin = new ArrayList<>();
-        List<Integer> largeSquareBlock = new ArrayList<>();
-        for (int a = 0; a<MainAI.planAhead.length; a++){
-            for (int b = 0; b<MainAI.planAhead[a].length; b++){
-                //If I have two squares in a row:
-                if (board.Largefilled[MainAI.planAhead[a][b][0]] == player &&
-                        board.Largefilled[MainAI.planAhead[a][b][1]] == player){
-                    largeSquareWin.add(a);
-                }
-                //If the opponent has two squares in a row:
-                else if (board.Largefilled[MainAI.planAhead[a][b][0]] == other[player] &&
-                        board.Largefilled[MainAI.planAhead[a][b][1]] == other[player]){
-                    largeSquareBlock.add(a);
-                }
-            }
-        }
-        //There exists some large square k such that if I take k, I win
-        if (!largeSquareWin.isEmpty()){
-            for (int a = 0; a<viable.size(); a++){
-                // Making this move gives the opponent a chance to block my win
-                if (largeSquareWin.contains(viable.get(a)[1])){
-                    values[a] -= 2;
-                }
-            }
-            //If there is a way to force my opponent into giving me the large square, do it
-        }
-        //There exists some large square k such that if the opponent takes k, I lose
-        else if (!largeSquareBlock.isEmpty()){
-            for (int a = 0; a<viable.size(); a++){
-                // Making this move gives the opponent a chance to create a win
-                if (largeSquareBlock.contains(viable.get(a)[1])){
-                    values[a] -= 3;
-                }
-            }
-        }
-        //At this point in the game, there is no setup such that by taking some large square k, one of us can win
-        else{
-            //I don't want to send my opponent to a place where he can take a large square so that
-            //     there exists some other large square k such that if the opponent takes k, I lose
-            for (int a = 0; a<viable.size(); a++){
-                for (int c = 0; c<MainAI.planAhead[viable.get(a)[1]].length; c++){
-                    for (int b = 0; b<nextPossible.get(a).size(); b++){
-                        Set set = new Set(board, viable.get(a)[0], viable.get(a)[1]);
-                        set.add(nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]);
-                        // If I make this move, then in the next move, the opponent can take a square
-                        if (set.numFill[other[player]-1] > set.numFill[other[player]-1]){
-                            // If I make this move, then in the next move, the opponent can take a square that has potential to lead to a loss
-                            if (set.Largefilled[MainAI.planAhead[viable.get(a)[1]][c][0]] == other[player] ||
-                                    set.Largefilled[MainAI.planAhead[viable.get(a)[1]][c][1]] == other[player]){
-                                values[a]-=3;
-                            }
-                            else{
-                                values[a]--;
-                            }
-                        }
-                    }
-                }
-            }
-            // If I go here, in the next move, will the opponent have an opportunity to
-        }
-        //        for (int a = 0; a<threads.size(); a++){
-        //            threads.get(a).start();
-        //        }
-        //        for (int a = 0; a<threads.size(); a++){
-        //            try{
-        //                threads.get(a).join();
-        //            }catch(InterruptedException e){}
-        //        }
-        //        double lowest = values[0];
-        //        for (int a = 1; a<values.length; a++){
-        //            if (values[a] < lowest){
-        //                lowest = values[a];
-        //            }
-        //        }
-        //        for (int a = 0; a<values.length; a++){
-        //            values[a] -= lowest-1;
-        //        }
-        return values;
-    }
-    
     private double depth3(Set depth2, List<int[]> possible, int numBranches, int player){
         double value = 0;
         List<depth4> nextDepth = new ArrayList<>();
@@ -546,7 +301,7 @@ public class SinglePlayer{
         for (int a = 0; a<possible.size(); a++){
             Set depth3 = new Set(depth2, possible.get(a)[0], possible.get(a)[1]);
             if (depth3.winner != 0){
-                if (depth3.winner == 2){
+                if (depth3.winner == player){
                     value += Board.game.path.size();
                 }
                 if (depth3.winner == 3){
@@ -562,23 +317,37 @@ public class SinglePlayer{
                     value -= Board.game.path.size()/5.0;
                 }
                 depth4Possible.add(depth3.getNextPossible());
-                if (Board.game.path.numFilled > 0){
-                    nextDepth.add(new depth4(depth3, depth4Possible.get(a), numBranches*possible.size(), player));
-                }
             }
         }
-        double[] depth3OpponentAnalysis = primaryAnalysis(depth2, possible, depth4Possible, player);
+        //        double[] depth3OpponentAnalysis = primaryAnalysis(depth2, possible, depth4Possible, player);
+        double[] depth3OpponentAnalysis = NeuralNetwork.getNeuralValues(depth2, possible, player);
         for (int b = 0; b<depth3OpponentAnalysis.length; b++){
-            value += depth3OpponentAnalysis[b]/3.0;
+            value += depth3OpponentAnalysis[b]/5.0/possible.size();
         }
-        for (int a = 0; a<nextDepth.size(); a++){
+        boolean[] nextLarge = new boolean[possible.size()];
+        for (int a = 0; a<possible.size(); a++){
+            Set depth3 = new Set(depth2, possible.get(a)[0], possible.get(a)[1]);
+            nextDepth.add(new depth4(depth3, depth4Possible.get(a), numBranches*possible.size(), player));
             threads.add(new Thread(nextDepth.get(a)));
+            if (depth3.nextLarge == -1){
+                nextLarge[a] = true;
+            }
+            else{
+                nextLarge[a] = false;
+            }
+        }
+        for (int a = 0; a<threads.size(); a++){
             threads.get(a).start();
         }
         for (int a = 0; a<threads.size(); a++){
             try{
                 threads.get(a).join();
-                value += nextDepth.get(a).getValue();
+                if (nextLarge[a]){
+                    value += nextDepth.get(a).getValue()/(8-depth2.nextLarge);
+                }
+                else{
+                    value += nextDepth.get(a).getValue();
+                }
             }catch(InterruptedException e){};
         }
         return value;
@@ -598,31 +367,32 @@ public class SinglePlayer{
         }
         @Override
         public void run() {
-            List<List<int[]>> depth5Possible = new ArrayList<>();
             for (int a = 0; a<possible.size(); a++){
                 Set depth4 = new Set(depth3, possible.get(a)[0], possible.get(a)[1]);
                 if (depth4.winner != 0){
-                    if (depth4.winner == 1){
+                    if (depth4.winner == other[player]){
                         value -= Board.game.path.size();
                     }
                     if (depth4.winner == 3){
                         value += Board.game.path.size()/3.0;
                     }
-                    depth5Possible.add(new ArrayList<>());
                 }
                 else{
                     if (depth4.numFill[other[player]-1] > depth4.numFill[other[player]-1]){
                         value += Board.game.path.size()/5.0;
                     }
-                    depth5Possible.add(depth4.getNextPossible());
-                    //                if (Board.game.path.numEmpty() < 45){
-                    value += depth5(depth4, depth5Possible.get(a), numBranches*possible.size(), player);
-                    //
+                    if (depth4.nextLarge == -1){
+                        value += depth5(depth4, depth4.getNextPossible(), numBranches*possible.size(), player)/(9-depth4.numFilled);
+                    }
+                    else{
+                        value += depth5(depth4, depth4.getNextPossible(), numBranches*possible.size(), player);
+                    }
                 }
             }
-            double[] depth4OpponentAnalysis = primaryAnalysis(depth3, possible, depth5Possible, other[player]);
+            //            double[] depth4OpponentAnalysis = primaryAnalysis(depth3, possible, depth5Possible, other[player]);
+            double[] depth4OpponentAnalysis = NeuralNetwork.getNeuralValues(depth3, possible, other[player]);
             for (int b = 0; b<depth4OpponentAnalysis.length; b++){
-                value -= depth4OpponentAnalysis[b]/4.0;
+                value -= depth4OpponentAnalysis[b]/8.0/possible.size();
             }
         }
         
@@ -632,120 +402,136 @@ public class SinglePlayer{
     }
     private double depth5(Set depth4, List<int[]> possible, int numBranches, int player){
         double value = 0;
-        List<depth6> nextDepth = new ArrayList<>();
-        List<Thread> threads = new ArrayList<>();
-        List<List<int[]>> depth6Possible = new ArrayList<>();
+        //List<List<int[]>> depth6Possible = new ArrayList<>();
         for (int a = 0; a<possible.size(); a++){
             Set depth5 = new Set(depth4, possible.get(a)[0], possible.get(a)[1]);
             if (depth5.winner != 0){
-                if (depth5.winner == 2){
+                if (depth5.winner == player){
                     value += Board.game.path.size();
                 }
                 if (depth5.winner == 3){
                     value += Board.game.path.size()/4.0;
                 }
-                depth6Possible.add(new ArrayList<>());
+                //depth6Possible.add(new ArrayList<>());
             }
             else{
                 if (depth5.numFill[player-1] > depth5.numFill[player-1]){
                     value += Board.game.path.size()/6.0;
                 }
-                depth6Possible.add(depth5.getNextPossible());
-                if (Board.game.path.numFilled > 3 && Board.game.path.nextLarge != -1){
-                    nextDepth.add(new depth6(depth5, depth6Possible.get(a), numBranches*possible.size(), player));
+                //depth6Possible.add(depth5.getNextPossible());
+            }
+        }
+        //        double[] depth5OpponentAnalysis = primaryAnalysis(depth4, possible, depth6Possible, player);
+        double[] depth5OpponentAnalysis = NeuralNetwork.getNeuralValues(depth4, possible, player);
+        for (int b = 0; b<depth5OpponentAnalysis.length; b++){
+            value += depth5OpponentAnalysis[b]/13.0/possible.size();
+        }
+//        List<depth6> nextDepth = new ArrayList<>();
+//        List<Thread> threads = new ArrayList<>();
+//        if (Board.game.path.numFilled > 3 && Board.game.path.nextLarge != -1){
+//            for (int a = 0; a<possible.size(); a++){
+//                Set depth5 = new Set(depth4, possible.get(a)[0], possible.get(a)[1]);
+//                depth6 d6 = new depth6(depth5, depth6Possible.get(a), numBranches*possible.size(), player);
+//                nextDepth.add(d6);
+//                Thread thread = new Thread(d6);
+//                threads.add(thread);
+//            }
+//        }
+//        for (int a = 0; a<threads.size(); a++){
+//            threads.get(a).start();
+//        }
+//        for (int a = 0; a<threads.size(); a++){
+//            try{
+//                threads.get(a).join();
+//                value += nextDepth.get(a).getValue();
+//            }catch(InterruptedException e){};
+//        }
+return value;
+    }
+    
+    private double[] randomSample(List<int[]> temp, List<List<int[]>> nextTemp, int player){
+        List<int[]> possible = new ArrayList<>();
+        for (int a = 0; a<temp.size(); a++){
+            possible.add(temp.get(a));
+        }
+        List<List<int[]>> nextPossible = new ArrayList<>();
+        for (int a = 0; a<nextTemp.size(); a++){
+            List<int[]> temp1 = new ArrayList<>();
+            for (int b = 0; b<nextTemp.get(a).size(); b++){
+                temp1.add(nextTemp.get(a).get(b));
+            }
+            nextPossible.add(temp1);
+        }
+        List<randomSample> randomSamples = new ArrayList<>();
+        List<Thread> threads = new ArrayList<>();
+        int numSample = 400-3*Board.game.path.numEmpty();
+        for (int a = 0; a<possible.size(); a++){
+            Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
+            for (int b = 0; b<nextPossible.get(a).size(); b++){
+                Set newset = new Set(set, nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]);
+                for (int c = 0; c<numSample; c++){
+                    randomSample rs = new randomSample(new Set(newset), a);
+                    randomSamples.add(rs);
+                    threads.add(new Thread(rs));
                 }
             }
         }
-        double[] depth5OpponentAnalysis = primaryAnalysis(depth4, possible, depth6Possible, other[player]);
-        for (int b = 0; b<depth5OpponentAnalysis.length; b++){
-            value += depth5OpponentAnalysis[b]/5.0;
-        }
-        for (int a = 0; a<nextDepth.size(); a++){
-            threads.add(new Thread(nextDepth.get(a)));
+        for (int a = 0; a<threads.size(); a++){
             threads.get(a).start();
         }
+        double[] randomSampleValues = new double[possible.size()];
         for (int a = 0; a<threads.size(); a++){
             try{
                 threads.get(a).join();
-                value += nextDepth.get(a).getValue();
+                int parent = randomSamples.get(a).getParent();
+                int winner = randomSamples.get(a).getWinner();
+                if (winner == player){
+                    randomSampleValues[parent] += NeuralNetwork.activationFunction(2, 2, -0.5);
+                }
+                else if (winner == other[player]){
+                    randomSampleValues[parent] -= NeuralNetwork.activationFunction(2, 0.25, -0.5);
+                }
+                else if (winner == 3){
+                    randomSampleValues[parent] += NeuralNetwork.activationFunction(2, -0.5, -0.5);
+                }
             }catch(InterruptedException e){};
         }
-        return value;
+        if (showProcess){
+            System.out.print("Random:  ");
+            for (int a = 0; a<randomSampleValues.length; a++){
+                System.out.print(p.round(randomSampleValues[a], 3)+"  ");
+            }
+            System.out.print("\nMove:      ");
+            for (int a = 0; a<possible.size(); a++){
+                System.out.print(possible.get(a)[1]+"      ");
+            }
+            System.out.println("");
+        }
+        return randomSampleValues;
     }
-    private class depth6 implements Runnable{
+    private class randomSample implements Runnable{
         
-        private double value = 0;
-        private Set depth5;
-        private List<int[]> possible;
-        private int numBranches, player;
+        Set set;
+        int parent;
         
-        public depth6(Set depth5, List<int[]> possible, int numBranches, int player) {
-            this.depth5 = depth5;
-            this.possible = possible;
-            this.numBranches = numBranches;
-            this.player = player;
+        public randomSample(Set set, int parent){
+            this.set = set;
+            this.parent = parent;
         }
         @Override
         public void run() {
-            List<List<int[]>> depth7Possible = new ArrayList<>();
-            for (int a = 0; a<possible.size(); a++){
-                Set depth6 = new Set(depth5, possible.get(a)[0], possible.get(a)[1]);
-                if (depth6.winner != 0){
-                    if (depth6.winner == 1){
-                        value -= Board.game.path.size();
-                    }
-                    if (depth6.winner == 3){
-                        value += Board.game.path.size()/4.0;
-                    }
-                    depth7Possible.add(new ArrayList<>());
-                }
-                else{
-                    if (depth6.numFill[other[player]-1] > depth6.numFill[other[player]-1]){
-                        value += Board.game.path.size()/7.0;
-                    }
-                    depth7Possible.add(depth6.getNextPossible());
-                    //                if (Board.game.path.numEmpty() < 45){
-                    value += depth7(depth6, depth7Possible.get(a), numBranches*possible.size(), player);
-                    //                }
-                }
-            }
-            double[] depth6OpponentAnalysis = primaryAnalysis(depth5, possible, depth7Possible, other[player]);
-            for (int b = 0; b<depth6OpponentAnalysis.length; b++){
-                value -= depth6OpponentAnalysis[b]/6.0;
+            while (set.winner == 0 && (set.size()-Board.game.path.size()) <= 20){
+                set.addRandom();
             }
         }
-        
-        public double getValue(){
-            return value;
+        public int getParent(){
+            return parent;
+        }
+        public int getWinner(){
+            return set.winner;
         }
     }
-    private double depth7(Set depth6, List<int[]> possible, int numBranches, int player){
-        double value = 0;
-        List<List<int[]>> depth8Possible = new ArrayList<>();
-        for (int a = 0; a<possible.size(); a++){
-            Set depth7 = new Set(depth6, possible.get(a)[0], possible.get(a)[1]);
-            if (depth7.winner != 0){
-                if (depth7.winner == 2){
-                    value += Board.game.path.size();
-                }
-                if (depth7.winner == 3){
-                    value += Board.game.path.size()/5.0;
-                }
-                depth8Possible.add(new ArrayList<>());
-            }
-            else{
-                if (depth7.numFill[player-1] > depth7.numFill[player-1]){
-                    value += Board.game.path.size()/8.0;
-                }
-                depth8Possible.add(depth7.getNextPossible());
-            }
-        }
-        double[] depth7OpponentAnalysis = primaryAnalysis(depth6, possible, depth8Possible, other[player]);
-        for (int b = 0; b<depth7OpponentAnalysis.length; b++){
-            value += depth7OpponentAnalysis[b]/7.0;
-        }
-        return value;
-    }
+    
     
     public void setValues(int move){
         int[]values = {0,2,1};
@@ -774,48 +560,221 @@ public class SinglePlayer{
     public void reset(){
         player = 0;
     }
-    
+//    private class depth6 implements Runnable{
+//
+//        private double value = 0;
+//        private Set depth5;
+//        private List<int[]> possible;
+//        private int numBranches, player;
+//
+//        public depth6(Set depth5, List<int[]> possible, int numBranches, int player) {
+//            this.depth5 = depth5;
+//            this.possible = possible;
+//            this.numBranches = numBranches;
+//            this.player = player;
+//        }
+//        @Override
+//        public void run() {
+//            List<List<int[]>> depth7Possible = new ArrayList<>();
+//            for (int a = 0; a<possible.size(); a++){
+//                Set depth6 = new Set(depth5, possible.get(a)[0], possible.get(a)[1]);
+//                if (depth6.winner != 0){
+//                    if (depth6.winner == other[player]){
+//                        value -= Board.game.path.size();
+//                    }
+//                    if (depth6.winner == 3){
+//                        value += Board.game.path.size()/4.0;
+//                    }
+//                    depth7Possible.add(new ArrayList<>());
+//                }
+//                else{
+//                    if (depth6.numFill[other[player]-1] > depth6.numFill[other[player]-1]){
+//                        value += Board.game.path.size()/7.0;
+//                    }
+//                    depth7Possible.add(depth6.getNextPossible());
+//                }
+//            }
+//            //            double[] depth6OpponentAnalysis = primaryAnalysis(depth5, possible, depth7Possible, other[player]);
+//            double[] depth6OpponentAnalysis = NeuralNetwork.getNeuralValues(depth5, possible, other[player]);
+//            for (int b = 0; b<depth6OpponentAnalysis.length; b++){
+//                value -= depth6OpponentAnalysis[b]/11.0/possible.size();
+//            }
+////            for (int a = 0; a<possible.size(); a++){
+////                Set depth6 = new Set(depth5, possible.get(a)[0], possible.get(a)[1]);
+////                value += depth7(depth6, depth7Possible.get(a), numBranches*possible.size(), player);
+////            }
+//        }
+//
+//        public double getValue(){
+//            return value;
+//        }
+//    }
+//    private double depth7(Set depth6, List<int[]> possible, int numBranches, int player){
+//        double value = 0;
+//        //List<List<int[]>> depth8Possible = new ArrayList<>();
+//        for (int a = 0; a<possible.size(); a++){
+//            Set depth7 = new Set(depth6, possible.get(a)[0], possible.get(a)[1]);
+//            if (depth7.winner != 0){
+//                if (depth7.winner == player){
+//                    value += Board.game.path.size();
+//                }
+//                if (depth7.winner == 3){
+//                    value += Board.game.path.size()/5.0;
+//                }
+//                //depth8Possible.add(new ArrayList<>());
+//            }
+//            else{
+//                if (depth7.numFill[player-1] > depth7.numFill[player-1]){
+//                    value += Board.game.path.size()/8.0;
+//                }
+//                //depth8Possible.add(depth7.getNextPossible());
+//            }
+//        }
+//        //        double[] depth7OpponentAnalysis = primaryAnalysis(depth6, possible, depth8Possible, player);
+//        double[] depth7OpponentAnalysis = NeuralNetwork.getNeuralValues(depth6, possible, player);
+//        for (int b = 0; b<depth7OpponentAnalysis.length; b++){
+//            value += depth7OpponentAnalysis[b]/13.0/possible.size();
+//        }
+////        List<depth8> nextDepth = new ArrayList<>();
+////        List<Thread> threads = new ArrayList<>();
+////        //        if (Board.game.path.numFilled > 3 && Board.game.path.nextLarge != -1){
+////        for (int a = 0; a<possible.size(); a++){
+////            Set depth7 = new Set(depth6, possible.get(a)[0], possible.get(a)[1]);
+////            depth8 d8 = new depth8(depth7, depth8Possible.get(a), numBranches*possible.size(), player);
+////            nextDepth.add(d8);
+////            Thread thread = new Thread(d8);
+////            threads.add(thread);
+////        }
+////        //        }
+////        for (int a = 0; a<threads.size(); a++){
+////            threads.get(a).start();
+////        }
+////        for (int a = 0; a<threads.size(); a++){
+////            try{
+////                threads.get(a).join();
+////                value += nextDepth.get(a).getValue();
+////            }catch(InterruptedException e){};
+////        }
+//return value;
+//    }
+//    private class depth8 implements Runnable{
+//
+//        private double value = 0;
+//        private Set depth7;
+//        private List<int[]> possible;
+//        private int numBranches, player;
+//
+//        public depth8(Set depth7, List<int[]> possible, int numBranches, int player) {
+//            this.depth7 = depth7;
+//            this.possible = possible;
+//            this.numBranches = numBranches;
+//            this.player = player;
+//        }
+//        @Override
+//        public void run() {
+//            List<List<int[]>> depth9Possible = new ArrayList<>();
+//            for (int a = 0; a<possible.size(); a++){
+//                Set depth8 = new Set(depth7, possible.get(a)[0], possible.get(a)[1]);
+//                if (depth8.winner != 0){
+//                    if (depth8.winner == other[player]){
+//                        value -= Board.game.path.size();
+//                    }
+//                    if (depth8.winner == 3){
+//                        value += Board.game.path.size()/6.0;
+//                    }
+//                    depth9Possible.add(new ArrayList<>());
+//                }
+//                else{
+//                    if (depth8.numFill[other[player]-1] > depth8.numFill[other[player]-1]){
+//                        value += Board.game.path.size()/11.0;
+//                    }
+//                    depth9Possible.add(depth8.getNextPossible());
+//                }
+//            }
+//            //            double[] depth6OpponentAnalysis = primaryAnalysis(depth5, possible, depth7Possible, other[player]);
+//            double[] depth8OpponentAnalysis = NeuralNetwork.getNeuralValues(depth7, possible, other[player]);
+//            for (int b = 0; b<depth8OpponentAnalysis.length; b++){
+//                value -= depth8OpponentAnalysis[b]/15.0/possible.size();
+//            }
+//            for (int a = 0; a<possible.size(); a++){
+//                Set depth8 = new Set(depth7, possible.get(a)[0], possible.get(a)[1]);
+//                value += depth9(depth8, depth9Possible.get(a), numBranches*possible.size(), player);
+//            }
+//        }
+//
+//        public double getValue(){
+//            return value;
+//        }
+//    }
+//    private double depth9(Set depth8, List<int[]> possible, int numBranches, int player){
+//        double value = 0;
+//        //List<List<int[]>> depth10Possible = new ArrayList<>();
+//        for (int a = 0; a<possible.size(); a++){
+//            Set depth9 = new Set(depth8, possible.get(a)[0], possible.get(a)[1]);
+//            if (depth9.winner != 0){
+//                if (depth9.winner == player){
+//                    value += Board.game.path.size();
+//                }
+//                if (depth9.winner == 3){
+//                    value += Board.game.path.size()/7.0;
+//                }
+//                //depth10Possible.add(new ArrayList<>());
+//            }
+//            else{
+//                if (depth9.numFill[player-1] > depth9.numFill[player-1]){
+//                    value += Board.game.path.size()/12.0;
+//                }
+//                //depth10Possible.add(depth9.getNextPossible());
+//            }
+//        }
+//        //        double[] depth7OpponentAnalysis = primaryAnalysis(depth6, possible, depth8Possible, player);
+//        double[] depth9OpponentAnalysis = NeuralNetwork.getNeuralValues(depth8, possible, player);
+//        for (int b = 0; b<depth9OpponentAnalysis.length; b++){
+//            value += depth9OpponentAnalysis[b]/17.0/possible.size();
+//        }
+//        return value;
+//    }
     
     
     public void old(){
         /*
-        for (int a = 1; a<viable.size(); a++){
-        if (values.get(a) > values.get(a-1)){
-        int[] firstPossible = viable.get(a);
-        int firstValue = values.get(a);
-        viable.set(a, viable.get(a-1));
-        values.set(a, values.get(a-1));
-        viable.set(a-1, firstPossible);
-        values.set(a-1, firstValue);
-        a = 0;
+        for (int b = 1; b<possible.size(); b++){
+        if (values.get(b) > values.get(b-1)){
+        int[] firstPossible = possible.get(b);
+        int firstValue = values.get(b);
+        possible.set(b, possible.get(b-1));
+        values.set(b, values.get(b-1));
+        possible.set(b-1, firstPossible);
+        values.set(b-1, firstValue);
+        b = 0;
         }
         }
         long start = System.currentTimeMillis();
         if (showProcess) {System.out.print("Most Promising Moves Found: {");}
         List<int[]> promising = new ArrayList<>();
-        for (int a = 0; a<viable.size() && a<3; a++){
-        promising.add(viable.get(a));
-        if (showProcess) {System.out.print(viable.get(a)[1]+",  ");}
+        for (int b = 0; b<possible.size() && b<3; b++){
+        promising.add(possible.get(b));
+        if (showProcess) {System.out.print(possible.get(b)[1]+",  ");}
         }
         if (showProcess) {System.out.println("}");}
         values.clear();
         values.addAll(deepSearch(promising));
-        for (int a = 1; a<promising.size(); a++){
-        if (values.get(a) > values.get(a-1)){
-        int[] firstPromising = promising.get(a);
-        int firstValue = values.get(a);
-        promising.set(a, promising.get(a-1));
-        values.set(a, values.get(a-1));
-        promising.set(a-1, firstPromising);
-        values.set(a-1, firstValue);
-        a = 0;
+        for (int b = 1; b<promising.size(); b++){
+        if (values.get(b) > values.get(b-1)){
+        int[] firstPromising = promising.get(b);
+        int firstValue = values.get(b);
+        promising.set(b, promising.get(b-1));
+        values.set(b, values.get(b-1));
+        promising.set(b-1, firstPromising);
+        values.set(b-1, firstValue);
+        b = 0;
         }
         }
-        for (int a = 1; a<promising.size(); a++){
-        if (values.get(a) > values.get(0)){
-        values.remove(a);
-        promising.remove(a);
-        a = 0;
+        for (int b = 1; b<promising.size(); b++){
+        if (values.get(b) > values.get(0)){
+        values.remove(b);
+        promising.remove(b);
+        b = 0;
         }
         }
         if (showProcess) {System.out.println("Took "+(System.currentTimeMillis()-start)+" Milliseconds to complete Secondary Deep Analysis");}
@@ -824,8 +783,8 @@ public class SinglePlayer{
         return promising.get(0)[1];
         }
         if (promising.size() > 1){
-        for (int a = 0; a<viable.size(); a++){
-        int index = promising.indexOf(viable.get(a));
+        for (int b = 0; b<possible.size(); b++){
+        int index = promising.indexOf(possible.get(b));
         if (index != -1){
         Board.game.LargeBox = promising.get(index)[0];
         return promising.get(index)[1];
@@ -834,16 +793,16 @@ public class SinglePlayer{
         }public List<Integer> deepSearch (List<int[]> possible){
         List<Thread> threads = new ArrayList<>();
         List<Integer> values = new ArrayList<>();
-        for (int a = 0; a<possible.size(); a++){
+        for (int b = 0; b<possible.size(); b++){
         values.add(0);
-        Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
+        Set set = new Set(Board.game.path, possible.get(b)[0], possible.get(b)[1]);
         List<int[]> nextPossible = MainAI.getPossible(set);
-        final int A = a;
-        for (int b = 0; b<nextPossible.size(); b++){
-        Set newset = new Set(set, nextPossible.get(b)[0], nextPossible.get(b)[1]);
+        final int A = b;
+        for (int c = 0; c<nextPossible.size(); c++){
+        Set newset = new Set(set, nextPossible.get(c)[0], nextPossible.get(c)[1]);
         if (newset.winner == 1 && possible.size() > 1){
-        possible.remove(a);
-        a--;
+        possible.remove(b);
+        b--;
         break;
         }
         else{
@@ -855,9 +814,9 @@ public class SinglePlayer{
         }
         }
         }
-        for (int a = 0; a<threads.size(); a++){
+        for (int b = 0; b<threads.size(); b++){
         try{
-        threads.get(a).join();
+        threads.get(b).join();
         }catch(InterruptedException e){}
         }
         return values;
@@ -867,9 +826,9 @@ public class SinglePlayer{
         public void bruteForceSearch (Set set, final int depth, List<Integer> values, final int parent){
         List<int[]> possible = MainAI.getPossible(set);
         int[] Largegrid = set.Largefilled;
-        for (int a = 0; a<possible.size(); a++){
-        if (Largegrid[possible.get(a)[1]] == 0){
-        Set newset = new Set(set, possible.get(a)[0], possible.get(a)[1]);
+        for (int b = 0; b<possible.size(); b++){
+        if (Largegrid[possible.get(b)[1]] == 0){
+        Set newset = new Set(set, possible.get(b)[0], possible.get(b)[1]);
         if (newset.winner != 0 || depth == 0){
         values.set(parent, values.get(parent)+bruteForceOutcomes[newset.winner]);
         newset.updateHeuristic();

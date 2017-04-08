@@ -5,6 +5,7 @@
 */
 package AI;
 
+import Main.p;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -157,7 +158,7 @@ public class Set {
             for (int a = 0; a<9; a++){
                 if (Largefilled[a] == 0){
                     for (int b = 0; b<9; b++){
-                        if (Largefilled[a] == 0 && grid[a][b] == 0){
+                        if (grid[a][b] == 0){
                             int[] array = {a, b};
                             possible.add(array);
                         }
@@ -166,5 +167,12 @@ public class Set {
             }
         }
         return possible;
+    }
+    public void addRandom(){
+        List<int[]> possible = getNextPossible();
+        if (!possible.isEmpty()){
+            int[] move = possible.get(p.randomint(0, possible.size()-1));
+            add(move[0], move[1]);
+        }
     }
 }
