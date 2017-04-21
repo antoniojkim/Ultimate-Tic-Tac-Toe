@@ -21,7 +21,7 @@ public class SinglePlayer{
     static int[] other = {0, 2, 1};
     //static Thread planAhead, planAhead2;
     
-    
+    //private Learn learn = new Learn();
     /*
     - Monte Carlo Tree Search Algorithm
     - A* Algorithm
@@ -44,7 +44,7 @@ public class SinglePlayer{
     
     */
     
-    boolean showProcess = false;
+    boolean showProcess = true;
     public void move(int player){
         long start = System.currentTimeMillis();
         this.player = player;
@@ -57,7 +57,11 @@ public class SinglePlayer{
             setValues(array[1]);
         }
         else if (Board.game.path.size() < 3){
-            setValues (MainAI.random());
+            List<int[]> possible = Board.game.path.getNextPossible();
+            double[] primary = shallowAnalysis(Board.game.path, possible, player);
+            Sort.quicksort(primary, possible);
+            Board.game.LargeBox = possible.get(0)[0];
+            setValues (possible.get(0)[1]);
         }
         long time = System.currentTimeMillis()-start;
         System.out.println("Took "+time+" Milliseconds to process\n");
@@ -69,6 +73,12 @@ public class SinglePlayer{
     public int[] getMove(int player){
         // Find all the possible moves
         List<int[]> possible = Board.game.path.getNextPossible();
+        if (possible.isEmpty()){
+            System.exit(1);
+        }
+        if (possible.size() == 1){
+            return possible.get(0);
+        }
         // If I can win, take the win
         if (Board.game.path.numFill[player-1] > 1){
             for (int a = 0; a<possible.size(); a++){
@@ -120,15 +130,7 @@ public class SinglePlayer{
                         return possible.get(a);
                     }
                 }
-                return possible.get(p.randomint(0, possible.size()-1));
             }
-        }
-        if (possible.size() == 1){
-            return possible.get(0);
-        }
-        if (possible.isEmpty()){
-            possible.addAll(Board.game.path.getNextPossible());
-            return possible.get(p.randomint(0, possible.size()-1));
         }
         //return NeuralNetwork.process(Board.game.path, possible, player);
         return getMove(possible, player);
@@ -171,67 +173,138 @@ public class SinglePlayer{
             }
         }
         double[] rating = new double[possible.size()];
-        double[] primaryRating = primary(possible, player);
-        for (int a = 0; a<primaryRating.length; a++){
-            rating[a] += primaryRating[a]*15/Board.game.path.size();
-        }
-        double[] depthRating = depth(possible, nextPossible, player);
+        double[] depthRating = new double[possible.size()];
+        //            double[] primaryRating = shallowAnalysis(possible, player);
+        //            for (int a = 0; a<primaryRating.length; a++){
+        //                rating[a] += primaryRating[a];
+        //            }
+        depthRating = depth(possible, nextPossible, player);
         for (int a = 0; a<depthRating.length; a++){
             rating[a] += depthRating[a];
         }
-        if (Board.game.path.size() > 20 && Board.game.path.nextLarge != -1){
-            double[] randomSampleRating = randomSample(possible, nextPossible, player);
-            for (int a = 0; a<randomSampleRating.length; a++){
-                rating[a] += randomSampleRating[a]/Board.game.path.numEmpty();
-            }
-        }
-        Sort.quicksort(rating, possible);
-        if (showProcess){
-            System.out.print("Rating:  ");
-            for (int a = 0; a<rating.length; a++){
-                System.out.print(p.round(rating[a], 3)+"  ");
-            }
-            System.out.print("\nMove:      ");
-            for (int a = 0; a<possible.size(); a++){
-                System.out.print(possible.get(a)[1]+"      ");
-            }
-            System.out.println("\n\nMove Made:   ["+possible.get(0)[0]+", "+possible.get(0)[1]+"]");
-        }
-        return possible.get(0);
+        double[] randomSampleRating = new double[possible.size()];
+//        if (Board.game.path.numEmpty() < 70){ // && Board.game.path.nextLarge != -1
+randomSampleRating = randomSample(possible, nextPossible, rating, player);
+for (int a = 0; a<randomSampleRating.length; a++){
+    rating[a] += randomSampleRating[a];///Board.game.path.numEmpty();
+}
+//        }
+
+if (showProcess){
+    //learn.add(depthRating, randomSampleRating, rating, possible, Board.game.path);
+    System.out.print("Depth:   ");
+    for (int a = 0; a<depthRating.length; a++){
+        System.out.print(p.round(depthRating[a], 3)+"   ");
+    }
+    System.out.print("\nRandom:  ");
+    for (int a = 0; a<randomSampleRating.length; a++){
+        System.out.print(p.round(randomSampleRating[a], 3)+"   ");
+    }
+    System.out.print("\nRating:  ");
+    for (int a = 0; a<rating.length; a++){
+        System.out.print(p.round(rating[a], 3)+"   ");
+    }
+    System.out.print("\nMove:    ");
+    for (int a = 0; a<possible.size(); a++){
+        System.out.print("["+possible.get(a)[0]+", "+possible.get(a)[1]+"]    ");
+    }
+}
+Sort.quicksort(rating, possible);
+if (showProcess){
+    System.out.println("\n\nMove Made:   ["+possible.get(0)[0]+", "+possible.get(0)[1]+"]");
+    //learn.addMove(possible.get(0));
+}
+return possible.get(0);
     }
     
-    private double[] primary(List<int[]> temp, int player){
+    private double[] shallowAnalysis(Set set, List<int[]> possible, int player){
+        //double[] shallowAnalysis = shallowAnalysis(Board.game.path, possible, nextPossible, player);
+        double[] shallowAnalysis = NeuralNetwork.getNeuralValues(set, possible, player);
+        if (set.numFill[other[player]-1] >= set.numFill[player-1]){
+            for (int a = 0; a<possible.size(); a++){
+                double z = 0;
+                for (int b = 0; b<MainAI.setup.length; b++){
+                    for (int c = 0; c<MainAI.setup[b].length; c++){
+                        if (set.grid[possible.get(a)[1]][MainAI.setup[b][c][0]] == other[player] &&
+                                set.grid[possible.get(a)[1]][MainAI.setup[b][c][1]] == other[player]){
+                            z++;
+                        }
+                    }
+                }
+                shallowAnalysis[a] -= NeuralNetwork.activationFunction(1.25, z, -2);
+            }
+        }
+        for (int a = 0; a<shallowAnalysis.length; a++){
+            shallowAnalysis[a] *= (set.numEmpty()/10);
+        }
+        return shallowAnalysis;
+    }
+    
+    private double[] depth1(Set set, List<int[]> temp, List<List<int[]>> nextTemp, int player){
         List<int[]> possible = new ArrayList<>();
         for (int a = 0; a<temp.size(); a++){
             possible.add(temp.get(a));
         }
-        //double[] primaryAnalysis = primaryAnalysis(Board.game.path, possible, nextPossible, player);
-        double[] primaryAnalysis = NeuralNetwork.getNeuralValues(Board.game.path, possible, player);
+        List<List<int[]>> nextPossible = new ArrayList<>();
+        for (int a = 0; a<nextTemp.size(); a++){
+            List<int[]> temp1 = new ArrayList<>();
+            for (int b = 0; b<nextTemp.get(a).size(); b++){
+                temp1.add(nextTemp.get(a).get(b));
+            }
+            nextPossible.add(temp1);
+        }
+        int numNonEmpty = set.numNonEmpty();
+        double[] shallowAnalysis = shallowAnalysis(set, possible, player);
+        double[] depthSearch = new double[possible.size()];
         for (int a = 0; a<possible.size(); a++){
-            double z = 0;
-            for (int b = 0; b<MainAI.setup.length; b++){
-                for (int c = 0; c<MainAI.setup[b].length; c++){
-                    if (Board.game.path.grid[possible.get(a)[1]][MainAI.setup[b][c][0]] == other[player] &&
-                            Board.game.path.grid[possible.get(a)[1]][MainAI.setup[b][c][1]] == other[player]){
-                        z++;
-                    }
-                }
-            }
-            primaryAnalysis[a] -= 3*z;
+            Set depth1 = new Set(set, possible.get(a)[0], possible.get(a)[1]);
+            depthSearch[a] = depth2(set, depth1, nextPossible.get(a), shallowAnalysis[a], player);
+            depthSearch[a] = Math.cbrt(depthSearch[a]*numNonEmpty);
         }
-        if (showProcess){
-            System.out.print("Primary:   ");
-            for (int a = 0; a<primaryAnalysis.length; a++){
-                System.out.print(p.round(primaryAnalysis[a], 3)+"  ");
-            }
-            System.out.print("\nMove:      ");
-            for (int a = 0; a<possible.size(); a++){
-                System.out.print(possible.get(a)[1]+"      ");
-            }
-            System.out.println("");
-        }
-        return primaryAnalysis;
+        return depthSearch;
     }
+    private double depth2 (Set set, Set depth1, List<int[]> possible, double depth1Value, int player){
+        double value = 0;
+        double[] shallowAnalysis = shallowAnalysis(depth1, possible, player);
+        for (int a = 0; a<possible.size(); a++){
+            Set depth2 = new Set(depth1, possible.get(a)[0], possible.get(a)[1]);
+            value += depth3(set, depth1, depth2, depth2.getNextPossible(), depth1Value, shallowAnalysis[a], player);
+        }
+        return value;
+    }
+    private double depth3 (Set set, Set depth1, Set depth2, List<int[]> possible,
+            double depth1Value, double depth2Value, int player){
+        double value = 0;
+        double[] shallowAnalysis = shallowAnalysis(depth2, possible, player);
+        for (int a = 0; a<possible.size(); a++){
+            Set depth3 = new Set(depth2, possible.get(a)[0], possible.get(a)[1]);
+            value += depthAnalysis(set, depth1, depth2, depth3, depth1Value, depth2Value, shallowAnalysis[a], player);
+        }
+        return value;
+    }
+    private double depthAnalysis(Set set, Set depth1, Set depth2, Set depth3,
+            double depth1Value, double depth2Value, double depth3Value, int player){
+        double analysis = 0;
+        double worth = NeuralNetwork.activationFunction(4.5, 1, -3);
+        if (depth1.numFill[player-1] > set.numFill[player-1]){
+            analysis += 1.5*worth;
+            if (depth2.numFill[other[player]-1] > depth1.numFill[other[player]-1]){
+                analysis -= worth;
+            }
+        }
+        else if (depth2.numFill[other[player]-1] > depth2.numFill[other[player]-1]){
+            
+        }
+        return analysis;
+    }
+//    private double[] depth3 (Set set, List<int[]> temp, int player){
+//        List<int[]> possible = new ArrayList<>();
+//        for (int a = 0; a<temp.size(); a++){
+//            possible.add(temp.get(a));
+//        }
+//        double[] value = new double[possible.size()];
+//        return value;
+//    }
     
     private double[] depth(List<int[]> temp, List<List<int[]>> nextTemp, int player){
         List<int[]> possible = new ArrayList<>();
@@ -266,32 +339,35 @@ public class SinglePlayer{
                     if (depth2.nextLarge == -1){
                         depthSearch[a] += Board.game.path.size()/5.0;
                     }
-                    if (depth2.nextLarge != -1){
-                        depthSearch[a] += depth3(depth2, depth2.getNextPossible(), possible.size()*nextPossible.size(), player)/(9-depth2.numFilled);
-                    }
-                    else{
-                        depthSearch[a] += depth3(depth2, depth2.getNextPossible(), possible.size()*nextPossible.size(), player);
-                    }
+//                    if (depth2.nextLarge != -1){
+//                        depthSearch[a] += depth3(depth2, depth2.getNextPossible(), possible.size()*nextPossible.size(), player)/(9-depth2.numFilled);
+//                    }
+//                    else{
+depthSearch[a] += depth3(depth2, depth2.getNextPossible(), possible.size()*nextPossible.size(), player)/(2*nextPossible.size());
+//                    }
                 }
             }
-            //            double[] depth1OpponentAnalysis = primaryAnalysis(depth1, nextPossible.get(b), depth3Possible, other[player]);
+            //            double[] depth1OpponentAnalysis = shallowAnalysis(depth1, nextPossible.get(b), depth3Possible, other[player]);
             double[] depth1OpponentAnalysis = NeuralNetwork.getNeuralValues(depth1, nextPossible.get(a), other[player]);
             for (int b = 0; b<depth1OpponentAnalysis.length; b++){
-                depthSearch[a] -= depth1OpponentAnalysis[b]/3.0/nextPossible.get(a).size();
+                depthSearch[a] -= depth1OpponentAnalysis[b]/(possible.size()*nextPossible.size());
             }
         }
-        if (showProcess){
-            System.out.print("Depth:   ");
-            for (int a = 0; a<depthSearch.length; a++){
-                System.out.print(p.round(depthSearch[a], 3)+"  ");
-            }
-            System.out.print("\nMove:      ");
-            for (int a = 0; a<possible.size(); a++){
-                System.out.print(possible.get(a)[1]+"      ");
-            }
-            System.out.println("");
+        for (int a = 0; a<depthSearch.length; a++){
+            depthSearch[a] = Math.cbrt(depthSearch[a]*Board.game.path.size());
         }
-        return depthSearch;
+//        if (showProcess){
+//            System.out.print("Depth:   ");
+//            for (int a = 0; a<depthSearch.length; a++){
+//                System.out.print(p.round(depthSearch[a], 3)+"  ");
+//            }
+//            System.out.print("\nMove:      ");
+//            for (int a = 0; a<possible.size(); a++){
+//                System.out.print(possible.get(a)[1]+"      ");
+//            }
+//            System.out.println("");
+//        }
+return depthSearch;
     }
     private double depth3(Set depth2, List<int[]> possible, int numBranches, int player){
         double value = 0;
@@ -319,38 +395,38 @@ public class SinglePlayer{
                 depth4Possible.add(depth3.getNextPossible());
             }
         }
-        //        double[] depth3OpponentAnalysis = primaryAnalysis(depth2, possible, depth4Possible, player);
+        //        double[] depth3OpponentAnalysis = shallowAnalysis(depth2, possible, depth4Possible, player);
         double[] depth3OpponentAnalysis = NeuralNetwork.getNeuralValues(depth2, possible, player);
         for (int b = 0; b<depth3OpponentAnalysis.length; b++){
-            value += depth3OpponentAnalysis[b]/5.0/possible.size();
+            value += depth3OpponentAnalysis[b]/(numBranches*possible.size());
         }
-        boolean[] nextLarge = new boolean[possible.size()];
-        for (int a = 0; a<possible.size(); a++){
-            Set depth3 = new Set(depth2, possible.get(a)[0], possible.get(a)[1]);
-            nextDepth.add(new depth4(depth3, depth4Possible.get(a), numBranches*possible.size(), player));
-            threads.add(new Thread(nextDepth.get(a)));
-            if (depth3.nextLarge == -1){
-                nextLarge[a] = true;
-            }
-            else{
-                nextLarge[a] = false;
-            }
-        }
-        for (int a = 0; a<threads.size(); a++){
-            threads.get(a).start();
-        }
-        for (int a = 0; a<threads.size(); a++){
-            try{
-                threads.get(a).join();
-                if (nextLarge[a]){
-                    value += nextDepth.get(a).getValue()/(8-depth2.nextLarge);
-                }
-                else{
-                    value += nextDepth.get(a).getValue();
-                }
-            }catch(InterruptedException e){};
-        }
-        return value;
+//        boolean[] nextLarge = new boolean[possible.size()];
+for (int a = 0; a<possible.size(); a++){
+    Set depth3 = new Set(depth2, possible.get(a)[0], possible.get(a)[1]);
+    nextDepth.add(new depth4(depth3, depth4Possible.get(a), numBranches*possible.size(), player));
+    threads.add(new Thread(nextDepth.get(a)));
+//            if (depth3.nextLarge == -1){
+//                nextLarge[a] = true;
+//            }
+//            else{
+//                nextLarge[a] = false;
+//            }
+}
+for (int a = 0; a<threads.size(); a++){
+    threads.get(a).start();
+}
+for (int a = 0; a<threads.size(); a++){
+    try{
+        threads.get(a).join();
+//                if (nextLarge[a]){
+//                    value += nextDepth.get(a).getValue()/(8-depth2.nextLarge);
+//                }
+//                else{
+value += nextDepth.get(a).getValue()/(2*depth4Possible.get(a).size());
+//                }
+    }catch(InterruptedException e){};
+}
+return value;
     }
     private class depth4 implements Runnable{
         
@@ -381,18 +457,18 @@ public class SinglePlayer{
                     if (depth4.numFill[other[player]-1] > depth4.numFill[other[player]-1]){
                         value += Board.game.path.size()/5.0;
                     }
-                    if (depth4.nextLarge == -1){
-                        value += depth5(depth4, depth4.getNextPossible(), numBranches*possible.size(), player)/(9-depth4.numFilled);
-                    }
-                    else{
-                        value += depth5(depth4, depth4.getNextPossible(), numBranches*possible.size(), player);
-                    }
+//                    if (depth4.nextLarge == -1){
+//                        value += depth5(depth4, depth4.getNextPossible(), numBranches*possible.size(), player)/(9-depth4.numFilled);
+//                    }
+//                    else{
+value += depth5(depth4, depth4.getNextPossible(), numBranches*possible.size(), player)/81.0;
+//                    }
                 }
             }
-            //            double[] depth4OpponentAnalysis = primaryAnalysis(depth3, possible, depth5Possible, other[player]);
+            //            double[] depth4OpponentAnalysis = shallowAnalysis(depth3, possible, depth5Possible, other[player]);
             double[] depth4OpponentAnalysis = NeuralNetwork.getNeuralValues(depth3, possible, other[player]);
             for (int b = 0; b<depth4OpponentAnalysis.length; b++){
-                value -= depth4OpponentAnalysis[b]/8.0/possible.size();
+                value -= depth4OpponentAnalysis[b]/(numBranches*possible.size());
             }
         }
         
@@ -421,10 +497,10 @@ public class SinglePlayer{
                 //depth6Possible.add(depth5.getNextPossible());
             }
         }
-        //        double[] depth5OpponentAnalysis = primaryAnalysis(depth4, possible, depth6Possible, player);
+        //        double[] depth5OpponentAnalysis = shallowAnalysis(depth4, possible, depth6Possible, player);
         double[] depth5OpponentAnalysis = NeuralNetwork.getNeuralValues(depth4, possible, player);
         for (int b = 0; b<depth5OpponentAnalysis.length; b++){
-            value += depth5OpponentAnalysis[b]/13.0/possible.size();
+            value += depth5OpponentAnalysis[b]/(numBranches*possible.size());
         }
 //        List<depth6> nextDepth = new ArrayList<>();
 //        List<Thread> threads = new ArrayList<>();
@@ -449,7 +525,7 @@ public class SinglePlayer{
 return value;
     }
     
-    private double[] randomSample(List<int[]> temp, List<List<int[]>> nextTemp, int player){
+    private double[] randomSample(List<int[]> temp, List<List<int[]>> nextTemp, double[] tempRating, int player){
         List<int[]> possible = new ArrayList<>();
         for (int a = 0; a<temp.size(); a++){
             possible.add(temp.get(a));
@@ -462,18 +538,23 @@ return value;
             }
             nextPossible.add(temp1);
         }
+        if (Board.game.path.nextLarge == -1){
+            double[] ratings = new double[tempRating.length];
+            for (int a = 0; a<ratings.length; a++){
+                ratings[a] = tempRating[a];
+            }
+            Sort.quicksort(ratings, possible, nextPossible);
+        }
+        int numSample = Math.min(possible.size(), 18);
         List<randomSample> randomSamples = new ArrayList<>();
         List<Thread> threads = new ArrayList<>();
-        int numSample = 400-3*Board.game.path.numEmpty();
-        for (int a = 0; a<possible.size(); a++){
+        for (int a = 0; a<numSample; a++){
             Set set = new Set(Board.game.path, possible.get(a)[0], possible.get(a)[1]);
+            int parent = temp.indexOf(possible.get(a));
             for (int b = 0; b<nextPossible.get(a).size(); b++){
-                Set newset = new Set(set, nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]);
-                for (int c = 0; c<numSample; c++){
-                    randomSample rs = new randomSample(new Set(newset), a);
-                    randomSamples.add(rs);
-                    threads.add(new Thread(rs));
-                }
+                randomSample rs = new randomSample(new Set(set, nextPossible.get(a).get(b)[0], nextPossible.get(a).get(b)[1]), parent, player);
+                randomSamples.add(rs);
+                threads.add(new Thread(rs));
             }
         }
         for (int a = 0; a<threads.size(); a++){
@@ -484,51 +565,105 @@ return value;
             try{
                 threads.get(a).join();
                 int parent = randomSamples.get(a).getParent();
-                int winner = randomSamples.get(a).getWinner();
-                if (winner == player){
-                    randomSampleValues[parent] += NeuralNetwork.activationFunction(2, 2, -0.5);
+                randomSampleValues[parent] += randomSamples.get(a).getNumWins()*NeuralNetwork.activationFunction(6, 1, -3);
+                randomSampleValues[parent] -= randomSamples.get(a).getNumLosses()*NeuralNetwork.activationFunction(6, 0.85, -3);
+                if (randomSamples.get(a).getNumWins() == 0){
+                    randomSampleValues[parent] += randomSamples.get(a).getNumTies()*NeuralNetwork.activationFunction(6, 1, -3);
                 }
-                else if (winner == other[player]){
-                    randomSampleValues[parent] -= NeuralNetwork.activationFunction(2, 0.25, -0.5);
-                }
-                else if (winner == 3){
-                    randomSampleValues[parent] += NeuralNetwork.activationFunction(2, -0.5, -0.5);
+                else{
+                    randomSampleValues[parent] += randomSamples.get(a).getNumTies()*NeuralNetwork.activationFunction(6, 0.2, -3);
                 }
             }catch(InterruptedException e){};
         }
-        if (showProcess){
-            System.out.print("Random:  ");
-            for (int a = 0; a<randomSampleValues.length; a++){
-                System.out.print(p.round(randomSampleValues[a], 3)+"  ");
-            }
-            System.out.print("\nMove:      ");
-            for (int a = 0; a<possible.size(); a++){
-                System.out.print(possible.get(a)[1]+"      ");
-            }
-            System.out.println("");
+        int numNonEmpty = Board.game.path.numNonEmpty();
+        for (int a = 0; a<randomSampleValues.length; a++){
+            randomSampleValues[a] = Math.cbrt(randomSampleValues[a]*numNonEmpty/nextPossible.get(a).size());
         }
-        return randomSampleValues;
+//        if (showProcess){
+//            System.out.print("Random:  ");
+//            for (int a = 0; a<randomSampleValues.length; a++){
+//                System.out.print(p.round(randomSampleValues[a], 3)+"  ");
+//            }
+//            System.out.print("\nMove:      ");
+//            for (int a = 0; a<possible.size(); a++){
+//                System.out.print(temp.get(a)[1]+"      ");
+//            }
+//            System.out.println("");
+//        }
+return randomSampleValues;
     }
     private class randomSample implements Runnable{
         
         Set set;
-        int parent;
+        int parent, player;
+        double numWins = 0;
+        double numLosses = 0;
+        double numTies = 0;
+        int breadth = 7, depth = 13;
         
-        public randomSample(Set set, int parent){
+        public randomSample(Set set, int parent, int player){
             this.set = set;
             this.parent = parent;
+            this.player = player;
         }
         @Override
         public void run() {
-            while (set.winner == 0 && (set.size()-Board.game.path.size()) <= 20){
-                set.addRandom();
+            random(set);
+        }
+        int count = 0;
+        private void random(Set set){
+            if (set.winner == player){
+                numWins += NeuralNetwork.activationFunction(1.25, set.numFill[player-1] - set.numFill[other[player]-1], -0.75)*20.0/(set.size()-Board.game.path.size());
+            }
+            else if (set.winner == other[player]){
+                numLosses += NeuralNetwork.activationFunction(1.25, set.numFill[other[player]-1] - set.numFill[player-1], -0.75)*20.0/(set.size()-Board.game.path.size());
+            }
+            else if (set.winner == 3){
+                numTies += NeuralNetwork.activationFunction(1.25, set.numFill[player-1] - set.numFill[other[player]-1], -0.75)/1.75*20.0/(set.size()-Board.game.path.size());
+            }
+            else if ((set.size()-Board.game.path.size()) <= 13){
+                List<int[]> possible = set.getNextPossible();
+                int numTimes = 2;
+                if ((set.size()-Board.game.path.size()) <= 7){
+                    numTimes = 3;
+                }
+                if (numTimes > possible.size()){
+                    for (int a = 0; a<numTimes; a++){
+                        int r = p.randomint(0, possible.size()-1);
+                        random(new Set(set, possible.get(r)[0], possible.get(r)[1]));
+                    }
+                }
+                else{
+                    for (int a = 0; a<numTimes; a++){
+                        int r = p.randomint(0, possible.size()-1);
+                        if (set.Largefilled[possible.get(r)[1]] != 0){
+                            r = p.randomint(0, possible.size()-1);
+                            if (set.Largefilled[possible.get(r)[1]] != 0){
+                                r = p.randomint(0, possible.size()-1);
+                            }
+                        }
+                        random(new Set(set, possible.get(r)[0], possible.get(r)[1]));
+                        possible.remove(r);
+                    }
+                }
+            }
+            else{
+                numWins += NeuralNetwork.activationFunction(1.1, set.numFill[player-1]-Board.game.path.numFill[player-1], -3);
+                numLosses += NeuralNetwork.activationFunction(1.1, set.numFill[other[player]-1]-Board.game.path.numFill[other[player]-1], -3);
             }
         }
+        
         public int getParent(){
             return parent;
         }
-        public int getWinner(){
-            return set.winner;
+        public double getNumWins(){
+            return numWins;
+        }
+        public double getNumLosses(){
+            return numLosses;
+        }
+        public double getNumTies(){
+            return numTies;
         }
     }
     
@@ -560,6 +695,9 @@ return value;
     public void reset(){
         player = 0;
     }
+    //public void save(){
+        //learn.save();
+    //}
 //    private class depth6 implements Runnable{
 //
 //        private double value = 0;
@@ -594,7 +732,7 @@ return value;
 //                    depth7Possible.add(depth6.getNextPossible());
 //                }
 //            }
-//            //            double[] depth6OpponentAnalysis = primaryAnalysis(depth5, possible, depth7Possible, other[player]);
+//            //            double[] depth6OpponentAnalysis = shallowAnalysis(depth5, possible, depth7Possible, other[player]);
 //            double[] depth6OpponentAnalysis = NeuralNetwork.getNeuralValues(depth5, possible, other[player]);
 //            for (int b = 0; b<depth6OpponentAnalysis.length; b++){
 //                value -= depth6OpponentAnalysis[b]/11.0/possible.size();
@@ -630,7 +768,7 @@ return value;
 //                //depth8Possible.add(depth7.getNextPossible());
 //            }
 //        }
-//        //        double[] depth7OpponentAnalysis = primaryAnalysis(depth6, possible, depth8Possible, player);
+//        //        double[] depth7OpponentAnalysis = shallowAnalysis(depth6, possible, depth8Possible, player);
 //        double[] depth7OpponentAnalysis = NeuralNetwork.getNeuralValues(depth6, possible, player);
 //        for (int b = 0; b<depth7OpponentAnalysis.length; b++){
 //            value += depth7OpponentAnalysis[b]/13.0/possible.size();
@@ -691,7 +829,7 @@ return value;
 //                    depth9Possible.add(depth8.getNextPossible());
 //                }
 //            }
-//            //            double[] depth6OpponentAnalysis = primaryAnalysis(depth5, possible, depth7Possible, other[player]);
+//            //            double[] depth6OpponentAnalysis = shallowAnalysis(depth5, possible, depth7Possible, other[player]);
 //            double[] depth8OpponentAnalysis = NeuralNetwork.getNeuralValues(depth7, possible, other[player]);
 //            for (int b = 0; b<depth8OpponentAnalysis.length; b++){
 //                value -= depth8OpponentAnalysis[b]/15.0/possible.size();
@@ -727,7 +865,7 @@ return value;
 //                //depth10Possible.add(depth9.getNextPossible());
 //            }
 //        }
-//        //        double[] depth7OpponentAnalysis = primaryAnalysis(depth6, possible, depth8Possible, player);
+//        //        double[] depth7OpponentAnalysis = shallowAnalysis(depth6, possible, depth8Possible, player);
 //        double[] depth9OpponentAnalysis = NeuralNetwork.getNeuralValues(depth8, possible, player);
 //        for (int b = 0; b<depth9OpponentAnalysis.length; b++){
 //            value += depth9OpponentAnalysis[b]/17.0/possible.size();

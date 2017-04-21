@@ -64,7 +64,7 @@ public class Set {
         Large.clear();
         Small.clear();
         Large.addAll(oldset.Large);
-        Small.addAll(oldset.Large);
+        Small.addAll(oldset.Small);
         numFilled = oldset.numFilled;
         for (int a = 0; a<Largefilled.length; a++){
             Largefilled[a] = oldset.Largefilled[a];
@@ -75,9 +75,9 @@ public class Set {
             }
         }
         winner = oldset.winner;
-        for (int a = 0; a<numFill.length; a++){
-            numFill[a] = oldset.numFill[a];
-        }
+        numFill[0] = oldset.numFill[0];
+        numFill[1] = oldset.numFill[1];
+        numFill[2] = oldset.numFill[2];
         nextLarge = oldset.nextLarge;
     }
     public void remove(){
@@ -97,6 +97,22 @@ public class Set {
                 for (int b = 0; b<grid[a].length; b++){
                     if (grid[a][b] != 0){
                         numEmpty--;
+                    }
+                }
+            }
+        }
+        return numEmpty;
+    }
+    public int numNonEmpty(){
+        int numEmpty = 0;
+        for (int a = 0; a<grid.length; a++){
+            if (Largefilled[a] != 0){
+                numEmpty += 9;
+            }
+            else{
+                for (int b = 0; b<grid[a].length; b++){
+                    if (grid[a][b] != 0){
+                        numEmpty++;
                     }
                 }
             }
@@ -123,10 +139,18 @@ public class Set {
             return true;
         }
     }
-    public void print(){
+    public String getString(){
+        String string = "Set:  ";
         for (int a = 0; a<Large.size(); a++){
-            System.out.println(Large.get(a)+", "+Small.get(a));
+            if (a != 0){
+                string += ", ";
+            }
+            string += "["+Large.get(a)+", "+Small.get(a)+"]";
         }
+        return string;
+    }
+    public void print(){
+        System.out.println(getString());
     }
 //    public int[][] toArray(){
 //        int[][] array = new int [9][9];

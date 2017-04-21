@@ -13,7 +13,7 @@ public class Window extends JFrame{
     int width = (int)(p.getScreenWidth()*3.0/4.0), height = (int)(p.getScreenHeight()*8.0/9.0);
     
     public Window(){
-        super("Ultimate Tic Tac Toe v2.54 by Antonio Kim");
+        super("Ultimate Tic Tac Toe v2.62 by Antonio Kim");
         setLayout(new BorderLayout());
         
         setSize(width, height);   //used to be 1200, 800
@@ -21,6 +21,9 @@ public class Window extends JFrame{
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+//                try{
+//                    Board.game.computers.save();
+//                }catch(NullPointerException e){}
                 System.exit(0);
             }
         });

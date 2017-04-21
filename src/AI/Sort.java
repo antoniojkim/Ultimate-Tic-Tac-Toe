@@ -67,6 +67,39 @@ public class Sort {
         quicksort(array, pos+1, last, possible, ascending);
     }
     
+    public static void quicksort(double[] values, List<int[]> possible, List<List<int[]>> nextPossible){
+        quicksort(values, possible, true);
+    }
+    public static void quicksort(double[] values, List<int[]> possible, List<List<int[]>> nextPossible, boolean ascending){
+        quicksort(values, 0, values.length-1, possible, ascending);
+    }
+    private static void quicksort(double[] array, int first, int last, List<int[]> possible, List<List<int[]>> nextPossible, boolean ascending){
+        if (first >= last){
+            return;
+        }
+        double pivot = array[first];
+        int pos = last;
+        if (ascending){
+            for (int a = last; a>first; a--){
+                if (array[a] < pivot || (array[a] == pivot && Math.random() > 0)){
+                    swap(array, possible, pos, a);
+                    pos--;
+                }
+            }
+        }
+        else{
+            for (int a = last; a>first; a--){
+                if (array[a] > pivot || (array[a] == pivot && Math.random() > 0)){
+                    swap(array, possible, pos, a);
+                    pos--;
+                }
+            }
+        }
+        swap(array, possible, first, pos);
+        quicksort(array, first, pos-1, possible, ascending);
+        quicksort(array, pos+1, last, possible, ascending);
+    }
+    
     private static void swap(double[] array, List<int[]> possible, int pos1, int pos2){
         double temp = array[pos1];
         array[pos1] = array[pos2];
@@ -75,5 +108,18 @@ public class Sort {
         int[] tempArray = possible.get(pos1);
         possible.set(pos1, possible.get(pos2));
         possible.set(pos2, tempArray);
+    }
+    private static void swap(double[] array, List<int[]> possible, List<List<int[]>> nextPossible, int pos1, int pos2){
+        double temp = array[pos1];
+        array[pos1] = array[pos2];
+        array[pos2] = temp;
+        
+        int[] tempArray = possible.get(pos1);
+        possible.set(pos1, possible.get(pos2));
+        possible.set(pos2, tempArray);
+        
+        List<int[]> tempArray2 = nextPossible.get(pos1);
+        nextPossible.set(pos1, nextPossible.get(pos2));
+        nextPossible.set(pos2, tempArray2);
     }
 }

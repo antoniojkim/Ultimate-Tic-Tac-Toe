@@ -14,27 +14,18 @@ import java.util.List;
 */
 public class NeuralNetwork {
     
-    /*
+//    /*
     public static void main (String[] args){
         double extraFactor = 1;
         
-        double weight1 = 2;
-        double z1 = 0.25;
-        double bias1 = -0.5;
-        System.out.println("Weight:  "+weight1+"   z:  "+z1+"   Bias:  "+bias1+"\n");
-        System.out.println(1/(1+Math.exp(-1*weight1*z1-bias1))*extraFactor);
+        double weight = 2;
+        double[] z = {1, 2, 3, 4, 5};
+        double bias = -5;
         
-        double weight2 = weight1;
-        double z2 = -0.5;
-        double bias2 = bias1;
-        System.out.println("\n\nWeight:  "+weight2+"   z:  "+z2+"   Bias:  "+bias2+"\n");
-        System.out.println(1/(1+Math.exp(-1*weight2*z2-bias2))*extraFactor);
-        
-        double weight3 = weight1;
-        double z3 = 1;
-        double bias3 = bias1;
-        System.out.println("\n\nWeight:  "+weight3+"   z:  "+z3+"   Bias:  "+bias3+"\n");
-        System.out.println(1/(1+Math.exp(-1*weight3*z3-bias3))*extraFactor);
+        for (int a = 0; a<z.length; a++){
+            System.out.print("Weight:  "+weight+"   z:  "+z[a]+"   Bias:  "+bias+"          ");
+            System.out.println(1/(1+Math.exp(-1*weight*z[a]-bias))*extraFactor+"\n");
+        }
     }
     /*
     */
@@ -101,8 +92,8 @@ public class NeuralNetwork {
         @Override
         public void run() {
             double[] firstLayerOutput =
-            {canTakeSquare(2.75, -2), canBlockOpponent(2, -1.5), isSettingUp(1.75, -2),
-                isCornerMove(1, -1.5), isGivingFreedom(2.85, -2), isGivingOpportunityToTake(5, -2)};
+            {canTakeSquare(2.75, -2), canBlockOpponent(2, -1.5), isSettingUp(1.75, -2), isCornerMove(1, -1.5),
+                isGivingFreedom(2.85, -2), isGivingOpportunityToTake(5, -2), isGivingOpportunityToBlock(5, -2.5)};
             for (int a = 0; a<firstLayerOutput.length; a++){
                 score += firstLayerOutput[a];//*(firstLayerOutput.length-a)/3;
             }
@@ -120,7 +111,7 @@ public class NeuralNetwork {
                     z = 1;
                 }
             }
-            return 2*(activationFunction(weight, z, bias)+wantToTakeSquare(1.5, -2));
+            return 2*(activationFunction(weight, z, bias)+wantToTakeSquare(2, -5));
         }
         private double wantToTakeSquare(final double weight, final double bias){
             double z = 0;
@@ -129,8 +120,15 @@ public class NeuralNetwork {
                         set.Largefilled[setup[move[0]][a][1]] == player){
                     z++;
                 }
-                if (set.Largefilled[setup[move[0]][a][0]] == other[player] ||
+                if (set.Largefilled[setup[move[0]][a][0]] == 0 &&
+                        set.Largefilled[setup[move[0]][a][1]] == 0){
+                    z++;
+                }
+                else if (set.Largefilled[setup[move[0]][a][0]] == other[player] &&
                         set.Largefilled[setup[move[0]][a][1]] == other[player]){
+                    z += 3;
+                }
+                else{
                     z--;
                 }
             }
@@ -145,14 +143,18 @@ public class NeuralNetwork {
                     break;
                 }
             }
-            return 2*(activationFunction(weight, z, bias)+wantToBlockSquare(4, -1));
+            return 1.75*(activationFunction(weight, z, bias)+wantToBlockSquare(4, -4));
         }
         private double wantToBlockSquare(final double weight, final double bias){
             double z = 0;
             for (int a = 0; a<setup[move[0]].length; a++){
-                if (set.Largefilled[setup[move[0]][a][0]] == other[player] &&
+                if (set.Largefilled[setup[move[0]][a][0]] == other[player] ||
                         set.Largefilled[setup[move[0]][a][1]] == other[player]){
-                    z++;
+                    z += 0.5;
+                    if (set.Largefilled[setup[move[0]][a][0]] == other[player] &&
+                            set.Largefilled[setup[move[0]][a][1]] == other[player]){
+                        z += 1.5;
+                    }
                 }
             }
             return activationFunction(weight, z, bias);
@@ -165,7 +167,7 @@ public class NeuralNetwork {
             else if (move[1] != 4 && move[1]%2 == 0){
                 z = 1;
             }
-            return activationFunction(weight, z, bias)*20/set.size();
+            return activationFunction(weight, z, bias);
         }
         private double isSettingUp(final double weight, final double bias){
             double z = 0;
@@ -179,27 +181,45 @@ public class NeuralNetwork {
                     z--;
                 }
             }
-            return activationFunction(weight, Math.max(z, 0), bias)*20/set.size();
+            return 1.5*activationFunction(weight, Math.max(z, 0), bias);//*20/set.size();
         }
         private double isGivingFreedom(final double weight, final double bias){
             double z = 0;
             if (newset.nextLarge == -1){
                 z = 1;
             }
-            return -1*activationFunction(weight, z, bias)*20/set.size();
+            return -1.25*activationFunction(weight, z, bias);//*20/set.size();
         }
         private double isGivingOpportunityToTake(final double weight, final double bias){
             double z = 0;
             for (int a = 0; a<setup.length; a++){
                 if (a != 4){
                     for (int b = 0; b<setup[a].length; b++){
-                        if (newset.grid[move[1]][setup[a][b][0]] == other[player] &
+                        if (newset.grid[move[1]][setup[a][b][0]] == other[player] &&
                                 newset.grid[move[1]][setup[a][b][1]] == other[player]){
-                            z = 1;
+                            z = 0.85;
+                            if (set.numFill[other[player]-1] == 0){
+                                z += 0.4;
+                            }
                             break;
                         }
                     }
                 }
+            }
+            return -1.5*activationFunction(weight, z, bias);
+        }
+        private double isGivingOpportunityToBlock(final double weight, final double bias){
+            double z = 0;
+            for (int a = 0; a<setup.length; a++){
+                //if (a != 4){
+                for (int b = 0; b<setup[a].length; b++){
+                    if (newset.grid[move[1]][setup[a][b][0]] == player &&
+                            newset.grid[move[1]][setup[a][b][1]] == player){
+                        z = 1;
+                        break;
+                    }
+                }
+                //}
             }
             return -1*activationFunction(weight, z, bias);
         }
@@ -215,6 +235,12 @@ public class NeuralNetwork {
     public static double activationFunction(double weight, double z, double bias){
         //Sigmoid/Logistic Function
         return 1/(1+Math.exp(-1*weight*z-bias));
+    }
+    public static double activationFunction(double weight, boolean z, double bias){
+        if (z){
+            return 1/(1+Math.exp(-1*weight-bias));
+        }
+        return 1/(1+Math.exp(-1*bias));
     }
     
     private static double costFunction(double[] weights, double[] biases){
